@@ -42,6 +42,12 @@ let history = store.history("prompt-hash-abc")?;
 llm-diff = { git = "https://github.com/Mattbusel/llm-diff" }
 ```
 
+Or one-liner:
+
+```ash
+cargo add --git https://github.com/Mattbusel/llm-diff
+```
+
 ## Test coverage
 
 ```bash
