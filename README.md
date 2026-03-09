@@ -1,22 +1,22 @@
 # llm-diff
 
-Output diffing and versioning primitives for LLM outputs — semantic diff, version store, and lineage tracking.
+Output diffing and versioning primitives for LLM outputs -- semantic diff, version store, and lineage tracking.
 
 Compare two LLM responses, track how outputs evolve across prompt iterations, and build audit trails for prompt engineering workflows.
 
 ## What's inside
 
-- **SemanticDiff** — word-level and structural diff between two LLM outputs
-- **VersionStore** — append-only output history keyed by prompt hash
-- **Lineage** — parent/child relationships between prompt versions
-- **DiffReport** — structured diff result: added, removed, changed sections with positions
+- **SemanticDiff** -- word-level and structural diff between two LLM outputs
+- **VersionStore** -- append-only output history keyed by prompt hash
+- **Lineage** -- parent/child relationships between prompt versions
+- **DiffReport** -- structured diff result: added, removed, changed sections with positions
 
 ## Use cases
 
-- Prompt regression testing — detect when a prompt change causes output drift
-- A/B output comparison — structured diff between two model responses
-- Audit trails — record all outputs for a given prompt over time
-- Change detection — trigger alerts when output structure changes significantly
+- Prompt regression testing -- detect when a prompt change causes output drift
+- A/B output comparison -- structured diff between two model responses
+- Audit trails -- record all outputs for a given prompt over time
+- Change detection -- trigger alerts when output structure changes significantly
 
 ## Quick start
 
@@ -24,8 +24,8 @@ Compare two LLM responses, track how outputs evolve across prompt iterations, an
 use llm_diff::{SemanticDiff, VersionStore};
 
 let diff = SemanticDiff::compute(
-    "The capital of France is Paris.",
-    "The capital of France is Lyon.",
+ "The capital of France is Paris.",
+ "The capital of France is Lyon.",
 );
 println!("Changed tokens: {:?}", diff.changed);
 
