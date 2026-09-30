@@ -39,13 +39,13 @@ let history = store.history("prompt-hash-abc")?;
 
 ```toml
 [dependencies]
-llm-diff = { git = "https://github.com/Mattbusel/llm-diff" }
+llm-diff = { git = "https://gitlab.com/mattbusel/llm-diff" }
 ```
 
 Or one-liner:
 
 ```ash
-cargo add --git https://github.com/Mattbusel/llm-diff
+cargo add --git https://gitlab.com/mattbusel/llm-diff
 ```
 
 ## Test coverage
@@ -56,4 +56,4 @@ cargo test
 
 ---
 
-> Used inside [tokio-prompt-orchestrator](https://github.com/Mattbusel/tokio-prompt-orchestrator) -- a production Rust orchestration layer for LLM pipelines. See the full [primitive library collection](https://github.com/Mattbusel/rust-crates).
+> Used inside [tokio-prompt-orchestrator](https://gitlab.com/mattbusel/tokio-prompt-orchestrator) -- a production Rust orchestration layer for LLM pipelines. See the full [primitive library collection](https://gitlab.com/mattbusel/rust-crates).
