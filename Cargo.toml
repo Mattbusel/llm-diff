@@ -1,9 +1,25 @@
 [package]
 name = "llm-diff"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
+rust-version = "1.85"
 license = "MIT"
-description = "Output diffing and versioning primitives for LLM outputs: semantic diff, version store, lineage tracking"
+description = "Diff, version and audit LLM outputs: line and word diffs, unified patches, structural JSON diffs, and a content-addressed version store"
+readme = "README.md"
+repository = "https://gitlab.com/mattbusel/llm-diff"
+documentation = "https://docs.rs/llm-diff"
+keywords = ["llm", "diff", "versioning", "json", "prompt"]
+categories = ["text-processing", "development-tools"]
+include = ["src/**/*.rs", "benches/**/*.rs", "examples/**/*.rs", "Cargo.toml", "README.md", "CHANGELOG.md", "LICENSE"]
+
+[features]
+default = []
+## Word diffs on Unicode word boundaries (CJK, punctuation): TextDiff::compute_unicode_words.
+unicode = ["similar/unicode"]
+## Apply unified diffs (patches) to text, via diffy: apply_patch.
+patch = ["dep:diffy"]
+## JSON Schema for the serialized types (schemars).
+schemars = ["dep:schemars"]
 
 [dependencies]
 thiserror = "1"
@@ -11,11 +27,53 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+# word and char diffs, unified diff output
+similar = "3.2"
+# line diffs (Histogram algorithm, git-style slider post-processing)
+imara-diff = { version = "0.2", default-features = false }
+# fast hashing for the word-overlap score (already a dependency of imara-diff)
+foldhash = { version = "0.1", default-features = false, features = ["std"] }
+# SHA-256 content addresses
+sha2 = "0.11"
+# applying patches (feature "patch")
+diffy = { version = "0.5", optional = true }
+# JSON Schema (feature "schemars")
+schemars = { version = "1", optional = true, features = ["chrono04"] }
+
+# Random UUIDs need the browser's crypto API on wasm32-unknown-unknown.
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+uuid = { version = "1", features = ["v4", "serde", "js"] }
 
 [dev-dependencies]
 criterion = { version = "0.5" }
 proptest = "1"
+# cross-checks and benchmarks against other diff crates
+json-patch = "4"
+diffy = "0.5"
+dissimilar = "1"
+llm_diff_011 = { package = "llm-diff", version = "=0.1.1" }
 
 [[bench]]
 name = "diff_bench"
 harness = false
+
+[[bench]]
+name = "vs_alternatives"
+harness = false
+
+[[example]]
+name = "quickstart"
+
+[[example]]
+name = "prompt_regression"
+
+[[example]]
+name = "structured_output"
+
+[[example]]
+name = "branch_merge"
+required-features = ["patch"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

@@ -6,15 +6,46 @@ use serde::{Deserialize, Serialize};
 
 /// A single audit event recorded in the log.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum AuditEvent {
     /// A new version was created and stored.
-    VersionCreated { version_id: String, model: String, timestamp: DateTime<Utc> },
+    VersionCreated {
+        /// Id of the version.
+        version_id: String,
+        /// Model that produced it.
+        model: String,
+        /// When it happened (UTC).
+        timestamp: DateTime<Utc>,
+    },
     /// A branch head was updated.
-    BranchCreated { branch: String, head_version_id: String, timestamp: DateTime<Utc> },
+    BranchCreated {
+        /// Branch name.
+        branch: String,
+        /// Version the branch now points at.
+        head_version_id: String,
+        /// When it happened (UTC).
+        timestamp: DateTime<Utc>,
+    },
     /// The store was rolled back from one version to another.
-    Rollback { from_version_id: String, to_version_id: String, timestamp: DateTime<Utc> },
+    Rollback {
+        /// Version rolled back from.
+        from_version_id: String,
+        /// Version rolled back to.
+        to_version_id: String,
+        /// When it happened (UTC).
+        timestamp: DateTime<Utc>,
+    },
     /// A diff was computed between two versions.
-    DiffComputed { from_id: String, to_id: String, similarity: f64, timestamp: DateTime<Utc> },
+    DiffComputed {
+        /// Older version id.
+        from_id: String,
+        /// Newer version id.
+        to_id: String,
+        /// Similarity score of the diff.
+        similarity: f64,
+        /// When it happened (UTC).
+        timestamp: DateTime<Utc>,
+    },
 }
 
 impl AuditEvent {

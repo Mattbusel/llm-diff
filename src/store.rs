@@ -8,18 +8,25 @@ use chrono::{DateTime, Utc};
 use crate::diff::TextDiff;
 use crate::error::DiffError;
 
-/// Computes an FNV-1a content address for deduplication.
-fn content_address(content: &str) -> String {
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for byte in content.bytes() {
-        hash ^= byte as u64;
-        hash = hash.wrapping_mul(0x100000001b3);
+/// SHA-256 of the content as 64 lowercase hex characters.
+///
+/// 0.1.x used a 64-bit FNV-1a hash, which is fast but not collision resistant:
+/// two different outputs could share an address and the second would shadow
+/// the first in [`VersionStore::get_by_address`].
+pub fn content_address(content: &str) -> String {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write;
+    let digest = Sha256::digest(content.as_bytes());
+    let mut out = String::with_capacity(64);
+    for byte in digest.iter() {
+        let _ = write!(out, "{byte:02x}");
     }
-    format!("{hash:016x}")
+    out
 }
 
 /// Metadata describing why a new version was created.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VersionAnnotation {
     /// Whether the prompt changed relative to the parent.
     pub prompt_changed: bool,
@@ -34,10 +41,11 @@ pub struct VersionAnnotation {
 
 /// A stored version of an LLM output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct OutputVersion {
     /// Unique UUID for this version.
     pub id: String,
-    /// FNV-1a hash of the content, used for deduplication.
+    /// SHA-256 of the content (hex), used for deduplication.
     pub content_address: String,
     /// The raw text content.
     pub content: String,
@@ -74,6 +82,11 @@ impl OutputVersion {
 }
 
 /// Content-addressable version store with branch and lineage support.
+///
+/// The whole store serializes with serde (for example to JSON with
+/// [`to_json`](Self::to_json)), so it can be saved and loaded between runs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct VersionStore {
     versions: HashMap<String, OutputVersion>,
     by_address: HashMap<String, String>,
@@ -94,9 +107,18 @@ impl VersionStore {
 
     /// Stores a version, returning its ID.
     ///
+    /// The size check estimates tokens as one per four bytes of text.
+    ///
     /// # Errors
-    /// Returns [`DiffError::OutputTooLarge`] if the content exceeds the token limit.
+    /// - [`DiffError::OutputTooLarge`] if the content exceeds the token limit.
+    /// - [`DiffError::VersionNotFound`] if `parent_id` names a version that is
+    ///   not in the store (0.1.x accepted it, and `lineage` then failed later).
     pub fn store(&mut self, version: OutputVersion) -> Result<String, DiffError> {
+        if let Some(parent) = &version.parent_id {
+            if !self.versions.contains_key(parent) {
+                return Err(DiffError::VersionNotFound(parent.clone()));
+            }
+        }
         let token_estimate = version.content.len() / 4;
         if token_estimate > self.max_output_tokens {
             return Err(DiffError::OutputTooLarge {
@@ -194,6 +216,45 @@ impl VersionStore {
 
     /// Returns the total number of stored versions.
     pub fn version_count(&self) -> usize { self.versions.len() }
+
+    /// Unified diff (`diff -u` format) between two stored versions, with
+    /// `context` unchanged lines around each change. Headers are the version ids.
+    ///
+    /// # Errors
+    /// Returns [`DiffError::VersionNotFound`] if either ID is missing.
+    pub fn unified_diff(&self, from_id: &str, to_id: &str, context: usize) -> Result<String, DiffError> {
+        let from = self.get(from_id)?;
+        let to = self.get(to_id)?;
+        Ok(crate::diff::unified_diff(&from.content, &to.content, context, from_id, to_id))
+    }
+
+    /// Three-way merge of two versions that share an ancestor, for example two
+    /// branches that edited the same answer. Needs the `patch` feature.
+    ///
+    /// # Errors
+    /// [`DiffError::VersionNotFound`] for an unknown id, or
+    /// [`DiffError::MergeConflict`] (with conflict markers) when the edits overlap.
+    #[cfg(feature = "patch")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "patch")))]
+    pub fn merge(&self, ancestor_id: &str, ours_id: &str, theirs_id: &str) -> Result<String, DiffError> {
+        crate::diff::merge3(&self.get(ancestor_id)?.content, &self.get(ours_id)?.content, &self.get(theirs_id)?.content)
+    }
+
+    /// Serialize the whole store (versions, branches, limit) to JSON.
+    ///
+    /// # Errors
+    /// Returns [`DiffError::Serialization`] if serialization fails.
+    pub fn to_json(&self) -> Result<String, DiffError> {
+        Ok(serde_json::to_string(self)?)
+    }
+
+    /// Load a store saved with [`to_json`](Self::to_json).
+    ///
+    /// # Errors
+    /// Returns [`DiffError::Serialization`] if the text is not a saved store.
+    pub fn from_json(json: &str) -> Result<Self, DiffError> {
+        Ok(serde_json::from_str(json)?)
+    }
 }
 
 #[cfg(test)]
@@ -311,5 +372,45 @@ mod tests {
         store.set_branch("main", id.clone()).unwrap();
         let head = store.branch_head("main").unwrap();
         assert_eq!(head.id, id);
+    }
+
+    #[test]
+    fn test_content_address_is_sha256() {
+        // Known SHA-256 of "abc".
+        assert_eq!(
+            content_address("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    #[test]
+    fn test_store_rejects_unknown_parent() {
+        let mut store = VersionStore::new(100_000);
+        let err = store.store(v("orphan", Some("missing-id".into()))).unwrap_err();
+        assert!(matches!(err, DiffError::VersionNotFound(id) if id == "missing-id"));
+        assert_eq!(store.version_count(), 0);
+    }
+
+    #[test]
+    fn test_store_json_roundtrip() {
+        let mut store = VersionStore::new(100_000);
+        let id1 = store.store(v("first", None)).unwrap();
+        let id2 = store.store(v("second", Some(id1.clone()))).unwrap();
+        store.set_branch("main", id2.clone()).unwrap();
+        let restored = VersionStore::from_json(&store.to_json().unwrap()).unwrap();
+        assert_eq!(restored.version_count(), 2);
+        assert_eq!(restored.branch_head("main").unwrap().id, id2);
+        assert_eq!(restored.lineage(&id2).unwrap().len(), 2);
+        assert!(VersionStore::from_json("{}").is_err());
+    }
+
+    #[test]
+    fn test_store_unified_diff() {
+        let mut store = VersionStore::new(100_000);
+        let a = store.store(v("one\ntwo\n", None)).unwrap();
+        let b = store.store(v("one\n2\n", Some(a.clone()))).unwrap();
+        let u = store.unified_diff(&a, &b, 3).unwrap();
+        assert!(u.contains("-two") && u.contains("+2"));
+        assert!(store.unified_diff(&a, "nope", 3).is_err());
     }
 }
