@@ -1,5 +1,13 @@
 # llm-diff
 
+<!-- outcome-block -->
+**See exactly what changed between two LLM answers when you changed the prompt, model or temperature: word, line and JSON diffs in a few lines of Rust.**
+
+**Why this over the alternatives:** A plain text diff marks a whole JSON array as changed. This reports the one element that moved, and builds for wasm too.
+
+**Guarantee:** if it doesn't do what this README says, [open an issue](https://github.com/Mattbusel/llm-diff/issues) and I'll fix it.
+<!-- outcome-block -->
+
 See exactly how an LLM's answer changed when you changed the prompt, the model or the temperature: line, word and character diffs, `git diff`-style patches, JSON diffs and JSON Patches, three-way merges, and a small version history for model outputs, in Rust.
 
 [![crates.io](https://img.shields.io/crates/v/llm-diff.svg)](https://crates.io/crates/llm-diff)
