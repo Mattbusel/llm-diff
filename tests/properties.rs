@@ -1,7 +1,7 @@
 //! Property tests and cross-checks against other crates.
 #![allow(clippy::unwrap_used)]
 
-use llm_diff::{json_diff, json_patch, unified_diff, DiffOp, JsonDiffOp, TextDiff};
+use llm_diff::{json_diff, json_diff_values, json_patch, unified_diff, DiffOp, JsonDiffOp, TextDiff};
 use proptest::prelude::*;
 use serde_json::Value;
 
@@ -17,6 +17,7 @@ fn rebuild(d: &TextDiff) -> (String, String) {
             }
             DiffOp::Delete(t) => old.push_str(t),
             DiffOp::Insert(t) => new.push_str(t),
+            other => panic!("unexpected op {other:?}"),
         }
     }
     (old, new)
@@ -80,6 +81,40 @@ proptest! {
         prop_assert_eq!(&doc, &b, "patch was {}", ours);
     }
 
+    /// unified_diff and TextDiff::compute run the same Histogram diff, so the
+    /// -/+ lines of the patch are exactly the Delete/Insert ops, in order.
+    #[test]
+    fn unified_diff_agrees_with_line_diff(a in text(), b in text(), context in 0usize..4) {
+        let ops: Vec<String> = TextDiff::compute(&a, &b)
+            .changes()
+            .map(|o| format!("{}{}", o.kind(), o.text()))
+            .collect();
+        let patch = unified_diff(&a, &b, context, "a", "b");
+        let lines: Vec<String> = patch
+            .split_inclusive('\n')
+            .skip(2) // --- and +++ headers
+            .filter(|l| l.starts_with('-') || l.starts_with('+'))
+            .map(|l| {
+                let l = l.strip_suffix('\n').unwrap_or(l);
+                l.strip_suffix('\r').unwrap_or(l).to_string()
+            })
+            .collect();
+        prop_assert_eq!(lines, ops, "patch was\n{}", patch);
+    }
+
+    /// The JSON diff and the JSON Patch describe the same change: an empty
+    /// patch exactly when the diff is Equal, and applying the patch with the
+    /// json-patch crate always gives the new value.
+    #[test]
+    fn json_diff_and_json_patch_agree(a in json_value(), b in json_value()) {
+        let ops = json_diff_values(&a, &b);
+        let ours = json_patch(&a, &b);
+        prop_assert_eq!(ours.as_array().unwrap().is_empty(), ops == vec![JsonDiffOp::Equal]);
+        let mut doc = a.clone();
+        json_patch::patch(&mut doc, &serde_json::from_value::<json_patch::Patch>(ours).unwrap()).unwrap();
+        prop_assert_eq!(doc, b);
+    }
+
     /// No diff of a value with itself; some diff otherwise.
     #[test]
     fn json_diff_detects_exactly_the_changes(a in json_value(), b in json_value()) {
@@ -99,7 +134,7 @@ proptest! {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(400))]
 
-    /// Unified diffs from similar apply cleanly with diffy.
+    /// Our unified diffs apply cleanly with diffy.
     #[test]
     fn unified_diff_round_trips_through_diffy(a in text(), b in text()) {
         // diffy works on lines; normalise CRLF like a text editor would.

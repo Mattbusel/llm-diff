@@ -1,4 +1,5 @@
-//! The README quickstart. Run with `cargo run --example quickstart`.
+//! Text, JSON and stored-version diffs in one program.
+//! Run with `cargo run --example quickstart`.
 
 use llm_diff::{json_diff, unified_diff, DiffError, OutputVersion, TextDiff, VersionAnnotation, VersionStore};
 
@@ -21,7 +22,7 @@ fn main() -> Result<(), DiffError> {
     }
 
     // Keep a history of outputs for one prompt.
-    let mut store = VersionStore::new(8_000); // refuse outputs over ~8k tokens
+    let mut store = VersionStore::new(32 * 1024); // refuse outputs over 32 KiB
     let v1 = store.store(OutputVersion::new("The answer is Paris.", "gpt-4o", VersionAnnotation::default(), None))?;
     let why = VersionAnnotation { prompt_changed: true, note: Some("added 'be brief'".into()), ..Default::default() };
     let v2 = store.store(OutputVersion::new("Paris.", "gpt-4o", why, Some(v1.clone())))?;

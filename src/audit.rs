@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: MIT
 //! Append-only audit log for compliance and legal review of output changes.
+//! Needs the `store` feature (on by default).
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 /// A single audit event recorded in the log.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// `#[non_exhaustive]`: match it with a wildcard arm, or use
+/// [`kind`](Self::kind) and [`timestamp`](Self::timestamp).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
 pub enum AuditEvent {
     /// A new version was created and stored.
     VersionCreated {
@@ -71,6 +76,19 @@ impl AuditEvent {
 }
 
 /// An append-only audit log. Events are never removed once recorded.
+///
+/// The store does not write to it by itself: record an event after each
+/// [`VersionStore`](crate::VersionStore) call you want on the record.
+///
+/// ```
+/// use llm_diff::{AuditEvent, AuditLog};
+/// let mut log = AuditLog::new();
+/// log.record(AuditEvent::VersionCreated { version_id: "v1".into(), model: "gpt-4o".into(), timestamp: chrono::Utc::now() });
+/// assert_eq!(log.events_of_kind("VersionCreated").len(), 1);
+/// assert!(log.to_json()?.contains("VersionCreated"));
+/// # Ok::<(), serde_json::Error>(())
+/// ```
+#[derive(Debug, Clone)]
 pub struct AuditLog {
     events: Vec<AuditEvent>,
 }

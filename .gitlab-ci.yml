@@ -20,6 +20,7 @@ test:
     - cargo build --all-features
     - cargo test --all-features
     - cargo test
+    - cargo test --no-default-features
     - cargo clippy --all-targets --all-features -- -D warnings
     - RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
     - cargo run --example quickstart
@@ -28,6 +29,18 @@ test:
     - cargo run --example branch_merge --features patch
     - rustup target add wasm32-unknown-unknown
     - cargo build --target wasm32-unknown-unknown --all-features
+    - cargo build --target wasm32-unknown-unknown --no-default-features
+
+# Every feature on its own (and none), so a cfg gate that only compiles with
+# some other feature turned on is caught. The diff-only core is
+# --no-default-features.
+features:
+  stage: test
+  script:
+    - rustup component add clippy
+    - cargo install cargo-hack --locked
+    - cargo hack test --each-feature
+    - cargo hack clippy --each-feature --all-targets -- -D warnings
 
 # The oldest Rust this crate promises to build on (rust-version in Cargo.toml).
 msrv:
@@ -38,3 +51,4 @@ msrv:
     CARGO_RESOLVER_INCOMPATIBLE_RUST_VERSIONS: fallback
   script:
     - cargo build --all-features
+    - cargo build --no-default-features

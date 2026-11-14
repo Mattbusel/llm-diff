@@ -2,18 +2,28 @@
 //! Diff primitives: line and word diffs of text, unified diff output, and a
 //! structural diff of JSON documents.
 //!
-//! Line diffs use [imara-diff](https://crates.io/crates/imara-diff)
-//! (Histogram algorithm, as in `git diff --histogram`); word and character
-//! diffs and unified patches use [similar](https://crates.io/crates/similar)
-//! (Myers). Both need memory proportional to the size of the input rather than
+//! # Which algorithm runs where
+//!
+//! | Function | Unit | Algorithm |
+//! |---|---|---|
+//! | [`TextDiff::compute`] | lines | Histogram ([imara-diff](https://crates.io/crates/imara-diff), as in `git diff --histogram`) with git's slider post-processing |
+//! | [`unified_diff`] | lines | the same Histogram diff as [`TextDiff::compute`], so both views of a change agree |
+//! | [`TextDiff::compute_words`], [`TextDiff::compute_chars`], `TextDiff::compute_unicode_words` | words, chars | Myers ([similar](https://crates.io/crates/similar)) |
+//! | [`json_diff`], [`json_diff_values`], [`json_patch`] | JSON values | key by key for objects; arrays aligned with a Myers diff of their elements |
+//!
+//! All of them need memory proportional to the size of the input rather than
 //! to the product of the two sizes.
 
 use crate::error::DiffError;
 use serde::{Deserialize, Serialize};
 
 /// A single edit operation in a text diff.
+///
+/// `#[non_exhaustive]`: match it with a wildcard arm (or use
+/// [`kind`](Self::kind), [`text`](Self::text) and [`is_change`](Self::is_change)).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
 pub enum DiffOp {
     /// Content present in both old and new.
     Equal(String),
@@ -39,11 +49,34 @@ impl DiffOp {
             DiffOp::Equal(s) | DiffOp::Insert(s) | DiffOp::Delete(s) => s,
         }
     }
+
+    /// `true` for [`Insert`](Self::Insert) and [`Delete`](Self::Delete), `false` for [`Equal`](Self::Equal).
+    pub fn is_change(&self) -> bool {
+        !matches!(self, DiffOp::Equal(_))
+    }
 }
 
 /// The result of comparing two text outputs.
+///
+/// Build one with [`compute`](Self::compute) (lines),
+/// [`compute_words`](Self::compute_words) or [`compute_chars`](Self::compute_chars).
+/// The fields can be read directly. The struct is `#[non_exhaustive]` so new
+/// fields can be added without a breaking release, which means it cannot be
+/// built with a struct literal outside this crate. The accessor methods
+/// ([`ops()`](Self::ops()), [`changes()`](Self::changes), [`ratio()`](Self::ratio()),
+/// [`similarity()`](Self::similarity()), [`is_identical()`](Self::is_identical))
+/// are the stable way to read it.
+///
+/// ```
+/// use llm_diff::TextDiff;
+/// let d = TextDiff::compute_words("Paris has 2.1 million people.", "Paris has 2.2 million people.");
+/// let changed: Vec<String> = d.changes().map(|o| format!("{}{}", o.kind(), o.text())).collect();
+/// assert_eq!(changed, ["-2.1", "+2.2"]);
+/// assert!(d.ratio() > 0.8 && !d.is_identical());
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
 pub struct TextDiff {
     /// Edit operations that turn the old text into the new one. For a line
     /// diff each op is one line without its line ending; for a word diff each
@@ -82,12 +115,19 @@ fn ops_from(diff: &similar::TextDiff<'_, '_, str>, strip_endings: bool) -> Vec<D
         .collect()
 }
 
-/// Line ops and the order-aware ratio, via imara-diff's Histogram algorithm.
-fn line_ops(old: &str, new: &str) -> (Vec<DiffOp>, f64) {
+/// The Histogram line diff (with git's slider post-processing) that both
+/// [`TextDiff::compute`] and [`unified_diff`] are built on.
+fn histogram_lines<'a>(old: &'a str, new: &'a str) -> (imara_diff::InternedInput<&'a str>, imara_diff::Diff) {
     use imara_diff::{Algorithm, Diff, InternedInput};
     let input = InternedInput::new(old, new);
     let mut diff = Diff::compute(Algorithm::Histogram, &input);
     diff.postprocess_lines(&input);
+    (input, diff)
+}
+
+/// Line ops and the order-aware ratio, via imara-diff's Histogram algorithm.
+fn line_ops(old: &str, new: &str) -> (Vec<DiffOp>, f64) {
+    let (input, diff) = histogram_lines(old, new);
     let line = |t: imara_diff::Token| strip_line_ending(input.interner[t]).to_string();
     let mut ops = Vec::with_capacity(input.before.len().max(input.after.len()));
     let mut equal = 0usize;
@@ -183,11 +223,45 @@ impl TextDiff {
     pub fn is_identical(&self) -> bool {
         self.identical
     }
+
+    /// The edit operations, in order.
+    pub fn ops(&self) -> &[DiffOp] {
+        &self.ops
+    }
+
+    /// Only the operations that changed something (inserts and deletes), in order.
+    pub fn changes(&self) -> impl Iterator<Item = &DiffOp> + '_ {
+        self.ops.iter().filter(|op| op.is_change())
+    }
+
+    /// Takes the edit operations out of the diff.
+    pub fn into_ops(self) -> Vec<DiffOp> {
+        self.ops
+    }
+
+    /// Order-aware similarity, 0.0 to 1.0: 2 * matched / total elements
+    /// (lines, words or characters).
+    pub fn ratio(&self) -> f64 {
+        self.ratio
+    }
+
+    /// Word overlap (Jaccard index of the two word sets), 0.0 to 1.0.
+    /// Ignores order and repetition.
+    pub fn similarity(&self) -> f64 {
+        self.similarity
+    }
 }
 
 /// A unified diff (the format of `diff -u` and `git diff`) of two texts, with
 /// `context` unchanged lines around each change. Returns an empty string when
 /// the texts are equal.
+///
+/// The changed lines are exactly the ones [`TextDiff::compute`] reports: both
+/// use the Histogram algorithm with git's slider post-processing. (Up to 0.2
+/// this function used similar's Myers diff, so the two views of one change
+/// could disagree.) A last line without a newline gets the usual
+/// `\ No newline at end of file` marker, so the patch applies with
+/// `git apply`, `patch`, and `apply_patch` (feature `patch`).
 ///
 /// ```
 /// let patch = llm_diff::unified_diff("a\nb\nc\n", "a\nB\nc\n", 1, "v1", "v2");
@@ -197,11 +271,60 @@ pub fn unified_diff(old: &str, new: &str, context: usize, old_name: &str, new_na
     if old == new {
         return String::new();
     }
-    similar::TextDiff::from_lines(old, new)
-        .unified_diff()
-        .context_radius(context)
-        .header(old_name, new_name)
-        .to_string()
+    let (input, diff) = histogram_lines(old, new);
+    let old_lines: Vec<&str> = input.before.iter().map(|&t| input.interner[t]).collect();
+    let new_lines: Vec<&str> = input.after.iter().map(|&t| input.interner[t]).collect();
+
+    // Turn the Histogram hunks into similar's op list, so similar's hunk
+    // grouping and `@@ -l,s +l,s @@` header formatting can be reused.
+    let mut ops = Vec::new();
+    let (mut b, mut a) = (0usize, 0usize);
+    for hunk in diff.hunks() {
+        let (bs, be) = (hunk.before.start as usize, hunk.before.end as usize);
+        let (as_, ae) = (hunk.after.start as usize, hunk.after.end as usize);
+        if bs > b {
+            ops.push(similar::DiffOp::Equal { old_index: b, new_index: a, len: bs - b });
+        }
+        ops.push(match (be > bs, ae > as_) {
+            (true, true) => similar::DiffOp::Replace { old_index: bs, old_len: be - bs, new_index: as_, new_len: ae - as_ },
+            (true, false) => similar::DiffOp::Delete { old_index: bs, old_len: be - bs, new_index: as_ },
+            _ => similar::DiffOp::Insert { old_index: bs, new_index: as_, new_len: ae - as_ },
+        });
+        b = be;
+        a = ae;
+    }
+    if b < old_lines.len() {
+        ops.push(similar::DiffOp::Equal { old_index: b, new_index: a, len: old_lines.len() - b });
+    }
+
+    fn line(out: &mut String, tag: char, text: &str) {
+        out.push(tag);
+        out.push_str(text);
+        if !text.ends_with('\n') {
+            out.push_str("\n\\ No newline at end of file\n");
+        }
+    }
+    let mut out = format!("--- {old_name}\n+++ {new_name}\n");
+    for group in similar::group_diff_ops(ops, context) {
+        if group.is_empty() {
+            continue;
+        }
+        out.push_str(&similar::udiff::UnifiedHunkHeader::new(&group).to_string());
+        out.push('\n');
+        for op in &group {
+            let (old_range, new_range) = (op.old_range(), op.new_range());
+            match op.tag() {
+                similar::DiffTag::Equal => old_lines[old_range].iter().for_each(|l| line(&mut out, ' ', l)),
+                similar::DiffTag::Delete => old_lines[old_range].iter().for_each(|l| line(&mut out, '-', l)),
+                similar::DiffTag::Insert => new_lines[new_range].iter().for_each(|l| line(&mut out, '+', l)),
+                similar::DiffTag::Replace => {
+                    old_lines[old_range].iter().for_each(|l| line(&mut out, '-', l));
+                    new_lines[new_range].iter().for_each(|l| line(&mut out, '+', l));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// Apply a unified diff (as made by [`unified_diff`], `diff -u` or
@@ -258,8 +381,12 @@ fn compute_similarity(a: &str, b: &str) -> f64 {
 }
 
 /// An operation in a structural JSON diff.
+///
+/// `#[non_exhaustive]`: match it with a wildcard arm, because new kinds of
+/// change (for example a moved array element) may be added in minor releases.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[non_exhaustive]
 pub enum JsonDiffOp {
     /// A value changed at the given JSON path (also used when the type changed).
     ValueChanged {

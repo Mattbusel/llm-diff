@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+#![cfg(feature = "store")]
 use chrono::Utc;
 use llm_diff::diff::json_diff;
 use llm_diff::{AuditEvent, AuditLog, DiffError, OutputVersion, VersionAnnotation, VersionStore};

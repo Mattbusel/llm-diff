@@ -26,6 +26,8 @@ fn main() -> Result<(), DiffError> {
             JsonDiffOp::KeyAdded { path, value } => println!("  + {path} = {value}"),
             JsonDiffOp::KeyRemoved { path, value } => println!("  - {path} (was {value})"),
             JsonDiffOp::Equal => println!("  nothing"),
+            // JsonDiffOp is #[non_exhaustive]: new kinds of change may be added.
+            other => println!("  {other:?}"),
         }
     }
 
