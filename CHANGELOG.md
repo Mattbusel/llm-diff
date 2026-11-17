@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.3.1] - 2026-11-16
+
+- Package metadata only: `repository` points at https://github.com/Mattbusel/llm-diff (the GitHub repository, where issues, releases and the dependents graph are), no code change from 0.3.0.
+
 ## 0.3.0 (2026-11-14, not yet published)
 
 A diff-only core, a version store that actually deduplicates, and types that
