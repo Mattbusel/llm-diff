@@ -1,14 +1,14 @@
 [package]
 name = "llm-diff"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT"
-description = "Diff LLM outputs: line, word and char diffs, unified patches, structural JSON diffs and RFC 6902 patches; optional content-addressed version store"
+description = "A similarity score is how a changed number passes your eval. Diff LLM outputs instead: word, line and char diffs, structural JSON diffs and RFC 6902 patches, three-way merge, a version store for outputs; builds for wasm32."
 readme = "README.md"
 repository = "https://github.com/Mattbusel/llm-diff"
 documentation = "https://docs.rs/llm-diff"
-keywords = ["llm", "diff", "versioning", "json", "prompt"]
+keywords = ["llm", "diff", "json", "prompt", "regression"]
 categories = ["text-processing", "development-tools"]
 include = ["src/**/*.rs", "benches/**/*.rs", "examples/**/*.rs", "Cargo.toml", "README.md", "CHANGELOG.md", "LICENSE"]
 

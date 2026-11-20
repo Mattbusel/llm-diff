@@ -115,9 +115,11 @@ pub mod store;
 
 #[cfg(feature = "store")]
 pub use audit::{AuditEvent, AuditLog};
-pub use diff::{json_diff, json_diff_values, json_patch, unified_diff, DiffOp, JsonDiffOp, TextDiff};
 #[cfg(feature = "patch")]
 pub use diff::{apply_patch, merge3};
+pub use diff::{
+    json_diff, json_diff_values, json_patch, unified_diff, DiffOp, JsonDiffOp, TextDiff,
+};
 pub use error::DiffError;
 #[cfg(feature = "store")]
 pub use store::{content_address, OutputVersion, VersionAnnotation, VersionStore};

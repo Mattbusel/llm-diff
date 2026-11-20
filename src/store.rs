@@ -26,12 +26,12 @@
 //! # Ok::<(), llm_diff::DiffError>(())
 //! ```
 
-use std::collections::{BTreeMap, HashMap, HashSet};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use crate::diff::TextDiff;
 use crate::error::DiffError;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use uuid::Uuid;
 
 /// SHA-256 of the content as 64 lowercase hex characters.
 ///
@@ -69,7 +69,6 @@ pub struct VersionAnnotation {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub metadata: BTreeMap<String, serde_json::Value>,
 }
-
 
 /// A stored version of an LLM output.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,7 +174,10 @@ impl VersionStore {
         }
         let size = version.content.len();
         if size > self.max_bytes {
-            return Err(DiffError::OutputTooLarge { size, limit: self.max_bytes });
+            return Err(DiffError::OutputTooLarge {
+                size,
+                limit: self.max_bytes,
+            });
         }
         version.content_address = content_address(&version.content);
         if let Some(existing) = self.by_address.get(&version.content_address) {
@@ -185,7 +187,8 @@ impl VersionStore {
             return Err(DiffError::DuplicateVersionId(version.id));
         }
         let id = version.id.clone();
-        self.by_address.insert(version.content_address.clone(), id.clone());
+        self.by_address
+            .insert(version.content_address.clone(), id.clone());
         self.versions.insert(id.clone(), version);
         Ok(id)
     }
@@ -197,7 +200,9 @@ impl VersionStore {
 
     /// Branch names and the version ID each one points at, in no particular order.
     pub fn branches(&self) -> impl Iterator<Item = (&str, &str)> + '_ {
-        self.branches.iter().map(|(b, id)| (b.as_str(), id.as_str()))
+        self.branches
+            .iter()
+            .map(|(b, id)| (b.as_str(), id.as_str()))
     }
 
     /// Retrieves a version by ID.
@@ -205,19 +210,27 @@ impl VersionStore {
     /// # Errors
     /// Returns [`DiffError::VersionNotFound`] if no version with that ID exists.
     pub fn get(&self, id: &str) -> Result<&OutputVersion, DiffError> {
-        self.versions.get(id).ok_or_else(|| DiffError::VersionNotFound(id.to_string()))
+        self.versions
+            .get(id)
+            .ok_or_else(|| DiffError::VersionNotFound(id.to_string()))
     }
 
     /// Retrieves a version by its content address, if present.
     pub fn get_by_address(&self, addr: &str) -> Option<&OutputVersion> {
-        self.by_address.get(addr).and_then(|id| self.versions.get(id))
+        self.by_address
+            .get(addr)
+            .and_then(|id| self.versions.get(id))
     }
 
     /// Points a named branch at a version.
     ///
     /// # Errors
     /// Returns [`DiffError::VersionNotFound`] if the version ID does not exist.
-    pub fn set_branch(&mut self, branch: impl Into<String>, version_id: impl Into<String>) -> Result<(), DiffError> {
+    pub fn set_branch(
+        &mut self,
+        branch: impl Into<String>,
+        version_id: impl Into<String>,
+    ) -> Result<(), DiffError> {
         let vid = version_id.into();
         if !self.versions.contains_key(&vid) {
             return Err(DiffError::VersionNotFound(vid));
@@ -232,7 +245,9 @@ impl VersionStore {
     /// - [`DiffError::BranchNotFound`] if the branch does not exist.
     /// - [`DiffError::VersionNotFound`] if the branch head ID is stale.
     pub fn branch_head(&self, branch: &str) -> Result<&OutputVersion, DiffError> {
-        let id = self.branches.get(branch)
+        let id = self
+            .branches
+            .get(branch)
             .ok_or_else(|| DiffError::BranchNotFound(branch.to_string()))?;
         self.get(id)
     }
@@ -283,17 +298,30 @@ impl VersionStore {
     }
 
     /// Returns the total number of stored versions.
-    pub fn version_count(&self) -> usize { self.versions.len() }
+    pub fn version_count(&self) -> usize {
+        self.versions.len()
+    }
 
     /// Unified diff (`diff -u` format) between two stored versions, with
     /// `context` unchanged lines around each change. Headers are the version ids.
     ///
     /// # Errors
     /// Returns [`DiffError::VersionNotFound`] if either ID is missing.
-    pub fn unified_diff(&self, from_id: &str, to_id: &str, context: usize) -> Result<String, DiffError> {
+    pub fn unified_diff(
+        &self,
+        from_id: &str,
+        to_id: &str,
+        context: usize,
+    ) -> Result<String, DiffError> {
         let from = self.get(from_id)?;
         let to = self.get(to_id)?;
-        Ok(crate::diff::unified_diff(&from.content, &to.content, context, from_id, to_id))
+        Ok(crate::diff::unified_diff(
+            &from.content,
+            &to.content,
+            context,
+            from_id,
+            to_id,
+        ))
     }
 
     /// Three-way merge of two versions that share an ancestor, for example two
@@ -304,8 +332,17 @@ impl VersionStore {
     /// [`DiffError::MergeConflict`] (with conflict markers) when the edits overlap.
     #[cfg(feature = "patch")]
     #[cfg_attr(docsrs, doc(cfg(feature = "patch")))]
-    pub fn merge(&self, ancestor_id: &str, ours_id: &str, theirs_id: &str) -> Result<String, DiffError> {
-        crate::diff::merge3(&self.get(ancestor_id)?.content, &self.get(ours_id)?.content, &self.get(theirs_id)?.content)
+    pub fn merge(
+        &self,
+        ancestor_id: &str,
+        ours_id: &str,
+        theirs_id: &str,
+    ) -> Result<String, DiffError> {
+        crate::diff::merge3(
+            &self.get(ancestor_id)?.content,
+            &self.get(ours_id)?.content,
+            &self.get(theirs_id)?.content,
+        )
     }
 
     /// Serialize the whole store (versions, branches, limit) to JSON.
@@ -355,7 +392,9 @@ impl VersionStore {
             }
             if let Some(parent) = &v.parent_id {
                 if !self.versions.contains_key(parent) {
-                    return bad(format!("version '{key}' has parent '{parent}', which is not in the store"));
+                    return bad(format!(
+                        "version '{key}' has parent '{parent}', which is not in the store"
+                    ));
                 }
             }
         }
@@ -366,7 +405,9 @@ impl VersionStore {
         }
         for (branch, id) in &self.branches {
             if !self.versions.contains_key(id) {
-                return bad(format!("branch '{branch}' points at missing version '{id}'"));
+                return bad(format!(
+                    "branch '{branch}' points at missing version '{id}'"
+                ));
             }
         }
         for v in self.versions.values_mut() {
@@ -376,11 +417,14 @@ impl VersionStore {
             }
         }
         let versions = &self.versions;
-        self.by_address.retain(|addr, id| versions.get(id).is_some_and(|v| &v.content_address == addr));
+        self.by_address
+            .retain(|addr, id| versions.get(id).is_some_and(|v| &v.content_address == addr));
         let mut newest_first: Vec<&OutputVersion> = versions.values().collect();
         newest_first.sort_by(|a, b| (b.created_at, &b.id).cmp(&(a.created_at, &a.id)));
         for v in newest_first {
-            self.by_address.entry(v.content_address.clone()).or_insert_with(|| v.id.clone());
+            self.by_address
+                .entry(v.content_address.clone())
+                .or_insert_with(|| v.id.clone());
         }
         Ok(())
     }
@@ -391,7 +435,12 @@ mod tests {
     use super::*;
 
     fn v(content: &str, parent: Option<String>) -> OutputVersion {
-        OutputVersion::new(content, "claude-sonnet-4-6", VersionAnnotation::default(), parent)
+        OutputVersion::new(
+            content,
+            "claude-sonnet-4-6",
+            VersionAnnotation::default(),
+            parent,
+        )
     }
 
     #[test]
@@ -413,7 +462,13 @@ mod tests {
     fn test_store_output_too_large_returns_error() {
         let mut store = VersionStore::new(10);
         let err = store.store(v("eleven byte", None)).unwrap_err();
-        assert!(matches!(err, DiffError::OutputTooLarge { size: 11, limit: 10 }));
+        assert!(matches!(
+            err,
+            DiffError::OutputTooLarge {
+                size: 11,
+                limit: 10
+            }
+        ));
         // the limit is bytes, inclusive: 10 bytes fit, and so do 3 CJK chars (9 bytes)
         assert!(store.store(v("ten bytes!", None)).is_ok());
         assert!(store.store(v("猫猫猫", None)).is_ok());
@@ -439,7 +494,10 @@ mod tests {
         let mut ver = v("original", None);
         ver.content = "edited".into();
         let id = store.store(ver).unwrap();
-        assert_eq!(store.get(&id).unwrap().content_address, content_address("edited"));
+        assert_eq!(
+            store.get(&id).unwrap().content_address,
+            content_address("edited")
+        );
         assert!(store.get_by_address(&content_address("edited")).is_some());
         assert!(store.get_by_address(&content_address("original")).is_none());
     }
@@ -484,15 +542,27 @@ mod tests {
         let mut edited_in_0_2 = good.clone();
         edited_in_0_2["versions"][&id]["content"] = "not x".into();
         let restored = VersionStore::from_json(&edited_in_0_2.to_string()).unwrap();
-        assert_eq!(restored.get(&id).unwrap().content_address, content_address("not x"));
-        assert_eq!(restored.get_by_address(&content_address("not x")).unwrap().id, id);
+        assert_eq!(
+            restored.get(&id).unwrap().content_address,
+            content_address("not x")
+        );
+        assert_eq!(
+            restored
+                .get_by_address(&content_address("not x"))
+                .unwrap()
+                .id,
+            id
+        );
         assert!(restored.get_by_address(&content_address("x")).is_none());
 
         // a missing address entry is rebuilt rather than rejected
         let mut no_index = good;
         no_index["by_address"] = serde_json::json!({});
         let restored = VersionStore::from_json(&no_index.to_string()).unwrap();
-        assert_eq!(restored.get_by_address(&content_address("x")).unwrap().id, id);
+        assert_eq!(
+            restored.get_by_address(&content_address("x")).unwrap().id,
+            id
+        );
     }
 
     #[test]
@@ -503,15 +573,25 @@ mod tests {
 
     #[test]
     fn test_annotation_metadata_roundtrip() {
-        let mut ann = VersionAnnotation { model_changed: true, ..Default::default() };
+        let mut ann = VersionAnnotation {
+            model_changed: true,
+            ..Default::default()
+        };
         ann.metadata.insert("seed".into(), 42.into());
         let json = serde_json::to_string(&ann).unwrap();
-        assert_eq!(serde_json::from_str::<VersionAnnotation>(&json).unwrap(), ann);
+        assert_eq!(
+            serde_json::from_str::<VersionAnnotation>(&json).unwrap(),
+            ann
+        );
         // empty metadata is left out, and old JSON without it still loads
         let plain = serde_json::to_string(&VersionAnnotation::default()).unwrap();
         assert!(!plain.contains("metadata"));
         let old = r#"{"prompt_changed":true,"model_changed":false,"temperature_changed":false,"note":null}"#;
-        assert!(serde_json::from_str::<VersionAnnotation>(old).unwrap().prompt_changed);
+        assert!(
+            serde_json::from_str::<VersionAnnotation>(old)
+                .unwrap()
+                .prompt_changed
+        );
     }
 
     #[test]
@@ -615,7 +695,9 @@ mod tests {
     #[test]
     fn test_store_rejects_unknown_parent() {
         let mut store = VersionStore::new(100_000);
-        let err = store.store(v("orphan", Some("missing-id".into()))).unwrap_err();
+        let err = store
+            .store(v("orphan", Some("missing-id".into())))
+            .unwrap_err();
         assert!(matches!(err, DiffError::VersionNotFound(id) if id == "missing-id"));
         assert_eq!(store.version_count(), 0);
     }

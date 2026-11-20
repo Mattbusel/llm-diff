@@ -1,7 +1,9 @@
 //! Property tests and cross-checks against other crates.
 #![allow(clippy::unwrap_used)]
 
-use llm_diff::{json_diff, json_diff_values, json_patch, unified_diff, DiffOp, JsonDiffOp, TextDiff};
+use llm_diff::{
+    json_diff, json_diff_values, json_patch, unified_diff, DiffOp, JsonDiffOp, TextDiff,
+};
 use proptest::prelude::*;
 use serde_json::Value;
 
@@ -26,8 +28,13 @@ fn rebuild(d: &TextDiff) -> (String, String) {
 fn text() -> impl Strategy<Value = String> {
     // small alphabet so diffs have both matches and changes; includes
     // multi-byte characters, CR and LF
-    prop::collection::vec(prop::sample::select(vec!["a", "b", " ", "\n", "\r\n", "é", "猫", "x y", ".", "\t"]), 0..40)
-        .prop_map(|v| v.concat())
+    prop::collection::vec(
+        prop::sample::select(vec![
+            "a", "b", " ", "\n", "\r\n", "é", "猫", "x y", ".", "\t",
+        ]),
+        0..40,
+    )
+    .prop_map(|v| v.concat())
 }
 
 fn json_value() -> impl Strategy<Value = Value> {
@@ -40,8 +47,12 @@ fn json_value() -> impl Strategy<Value = Value> {
     leaf.prop_recursive(4, 40, 5, |inner| {
         prop_oneof![
             prop::collection::vec(inner.clone(), 0..5).prop_map(Value::Array),
-            prop::collection::btree_map(prop::sample::select(vec!["k", "v", "a.b", "x y", "~", "/"]).prop_map(String::from), inner, 0..4)
-                .prop_map(|m| Value::Object(m.into_iter().collect())),
+            prop::collection::btree_map(
+                prop::sample::select(vec!["k", "v", "a.b", "x y", "~", "/"]).prop_map(String::from),
+                inner,
+                0..4
+            )
+            .prop_map(|m| Value::Object(m.into_iter().collect())),
         ]
     })
 }

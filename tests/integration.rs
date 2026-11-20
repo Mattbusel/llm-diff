@@ -25,7 +25,10 @@ fn test_full_versioning_workflow_with_audit_trail() {
     let v2 = OutputVersion::new(
         "Improved output from the model with more detail.",
         "claude-sonnet-4-6",
-        VersionAnnotation { prompt_changed: true, ..Default::default() },
+        VersionAnnotation {
+            prompt_changed: true,
+            ..Default::default()
+        },
         Some(id1.clone()),
     );
     let id2 = store.store(v2).unwrap();
@@ -66,9 +69,30 @@ fn test_json_diff_detects_model_output_change() {
 #[test]
 fn test_lineage_three_generations() {
     let mut store = VersionStore::new(100_000);
-    let id1 = store.store(OutputVersion::new("gen1", "m", VersionAnnotation::default(), None)).unwrap();
-    let id2 = store.store(OutputVersion::new("gen2", "m", VersionAnnotation::default(), Some(id1))).unwrap();
-    let id3 = store.store(OutputVersion::new("gen3", "m", VersionAnnotation::default(), Some(id2))).unwrap();
+    let id1 = store
+        .store(OutputVersion::new(
+            "gen1",
+            "m",
+            VersionAnnotation::default(),
+            None,
+        ))
+        .unwrap();
+    let id2 = store
+        .store(OutputVersion::new(
+            "gen2",
+            "m",
+            VersionAnnotation::default(),
+            Some(id1),
+        ))
+        .unwrap();
+    let id3 = store
+        .store(OutputVersion::new(
+            "gen3",
+            "m",
+            VersionAnnotation::default(),
+            Some(id2),
+        ))
+        .unwrap();
     let lineage = store.lineage(&id3).unwrap();
     assert_eq!(lineage.len(), 3);
 }
@@ -76,7 +100,14 @@ fn test_lineage_three_generations() {
 #[test]
 fn test_branch_workflow_set_and_retrieve() {
     let mut store = VersionStore::new(100_000);
-    let id = store.store(OutputVersion::new("main content", "m", VersionAnnotation::default(), None)).unwrap();
+    let id = store
+        .store(OutputVersion::new(
+            "main content",
+            "m",
+            VersionAnnotation::default(),
+            None,
+        ))
+        .unwrap();
     store.set_branch("main", id.clone()).unwrap();
     let head = store.branch_head("main").unwrap();
     assert_eq!(head.id, id);

@@ -95,19 +95,29 @@ pub struct AuditLog {
 
 impl AuditLog {
     /// Creates a new, empty audit log.
-    pub fn new() -> Self { Self { events: Vec::new() } }
+    pub fn new() -> Self {
+        Self { events: Vec::new() }
+    }
 
     /// Appends an event to the log.
-    pub fn record(&mut self, event: AuditEvent) { self.events.push(event); }
+    pub fn record(&mut self, event: AuditEvent) {
+        self.events.push(event);
+    }
 
     /// Returns all recorded events in insertion order.
-    pub fn events(&self) -> &[AuditEvent] { &self.events }
+    pub fn events(&self) -> &[AuditEvent] {
+        &self.events
+    }
 
     /// Returns the number of recorded events.
-    pub fn len(&self) -> usize { self.events.len() }
+    pub fn len(&self) -> usize {
+        self.events.len()
+    }
 
     /// Returns `true` if no events have been recorded.
-    pub fn is_empty(&self) -> bool { self.events.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.events.is_empty()
+    }
 
     /// Serializes the entire log to a JSON string.
     ///
@@ -124,7 +134,9 @@ impl AuditLog {
 }
 
 impl Default for AuditLog {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -193,16 +205,53 @@ mod tests {
 
     #[test]
     fn test_audit_event_kind_labels_correct() {
-        assert_eq!(AuditEvent::VersionCreated { version_id: "".into(), model: "".into(), timestamp: Utc::now() }.kind(), "VersionCreated");
-        assert_eq!(AuditEvent::BranchCreated { branch: "".into(), head_version_id: "".into(), timestamp: Utc::now() }.kind(), "BranchCreated");
-        assert_eq!(AuditEvent::Rollback { from_version_id: "".into(), to_version_id: "".into(), timestamp: Utc::now() }.kind(), "Rollback");
-        assert_eq!(AuditEvent::DiffComputed { from_id: "".into(), to_id: "".into(), similarity: 0.0, timestamp: Utc::now() }.kind(), "DiffComputed");
+        assert_eq!(
+            AuditEvent::VersionCreated {
+                version_id: "".into(),
+                model: "".into(),
+                timestamp: Utc::now()
+            }
+            .kind(),
+            "VersionCreated"
+        );
+        assert_eq!(
+            AuditEvent::BranchCreated {
+                branch: "".into(),
+                head_version_id: "".into(),
+                timestamp: Utc::now()
+            }
+            .kind(),
+            "BranchCreated"
+        );
+        assert_eq!(
+            AuditEvent::Rollback {
+                from_version_id: "".into(),
+                to_version_id: "".into(),
+                timestamp: Utc::now()
+            }
+            .kind(),
+            "Rollback"
+        );
+        assert_eq!(
+            AuditEvent::DiffComputed {
+                from_id: "".into(),
+                to_id: "".into(),
+                similarity: 0.0,
+                timestamp: Utc::now()
+            }
+            .kind(),
+            "DiffComputed"
+        );
     }
 
     #[test]
     fn test_audit_log_events_of_kind_empty_when_no_match() {
         let mut log = AuditLog::new();
-        log.record(AuditEvent::VersionCreated { version_id: "v1".into(), model: "m".into(), timestamp: Utc::now() });
+        log.record(AuditEvent::VersionCreated {
+            version_id: "v1".into(),
+            model: "m".into(),
+            timestamp: Utc::now(),
+        });
         assert!(log.events_of_kind("Rollback").is_empty());
     }
 }

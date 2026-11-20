@@ -18,12 +18,36 @@
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 
 const WORDS: &[&str] = &[
-    "the", "model", "returns", "a", "summary", "of", "Paris", "with", "population", "data", "and", "sources",
-    "for", "each", "claim", "in", "its", "answer", "which", "may", "change", "when", "prompt", "temperature",
+    "the",
+    "model",
+    "returns",
+    "a",
+    "summary",
+    "of",
+    "Paris",
+    "with",
+    "population",
+    "data",
+    "and",
+    "sources",
+    "for",
+    "each",
+    "claim",
+    "in",
+    "its",
+    "answer",
+    "which",
+    "may",
+    "change",
+    "when",
+    "prompt",
+    "temperature",
 ];
 
 fn word(seed: &mut u64) -> &'static str {
-    *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    *seed = seed
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     WORDS[(*seed >> 33) as usize % WORDS.len()]
 }
 
@@ -51,33 +75,66 @@ fn paragraph(n: usize, every: usize) -> (String, String) {
     let mut seed = 7;
     let words: Vec<&str> = (0..n).map(|_| word(&mut seed)).collect();
     let old = words.join(" ");
-    let new: Vec<&str> = words.iter().enumerate().map(|(i, w)| if i % every == every - 1 { "CHANGED" } else { *w }).collect();
+    let new: Vec<&str> = words
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            if i % every == every - 1 {
+                "CHANGED"
+            } else {
+                *w
+            }
+        })
+        .collect();
     (old, new.join(" "))
 }
 
 fn line_diffs(c: &mut Criterion) {
     let mut g = c.benchmark_group("line diff");
-    for (name, (old, new)) in [("answer 300 lines", lines(300, 20)), ("doc 5000 lines", lines(5_000, 100))] {
-        g.bench_with_input(BenchmarkId::new("llm-diff 0.2", name), &(&old, &new), |b, (o, n)| {
-            b.iter(|| black_box(llm_diff::TextDiff::compute(o, n)))
-        });
-        g.bench_with_input(BenchmarkId::new("llm-diff 0.1.1", name), &(&old, &new), |b, (o, n)| {
-            b.iter(|| black_box(llm_diff_011::TextDiff::compute(o, n)))
-        });
-        g.bench_with_input(BenchmarkId::new("similar", name), &(&old, &new), |b, (o, n)| {
-            b.iter(|| black_box(similar::TextDiff::from_lines(o.as_str(), n.as_str()).ops().len()))
-        });
-        g.bench_with_input(BenchmarkId::new("imara-diff", name), &(&old, &new), |b, (o, n)| {
-            b.iter(|| {
-                let input = imara_diff::InternedInput::new(o.as_str(), n.as_str());
-                let mut d = imara_diff::Diff::compute(imara_diff::Algorithm::Histogram, &input);
-                d.postprocess_lines(&input);
-                black_box(d.count_additions())
-            })
-        });
-        g.bench_with_input(BenchmarkId::new("diffy", name), &(&old, &new), |b, (o, n)| {
-            b.iter(|| black_box(diffy::create_patch(o, n).hunks().len()))
-        });
+    for (name, (old, new)) in [
+        ("answer 300 lines", lines(300, 20)),
+        ("doc 5000 lines", lines(5_000, 100)),
+    ] {
+        g.bench_with_input(
+            BenchmarkId::new("llm-diff 0.2", name),
+            &(&old, &new),
+            |b, (o, n)| b.iter(|| black_box(llm_diff::TextDiff::compute(o, n))),
+        );
+        g.bench_with_input(
+            BenchmarkId::new("llm-diff 0.1.1", name),
+            &(&old, &new),
+            |b, (o, n)| b.iter(|| black_box(llm_diff_011::TextDiff::compute(o, n))),
+        );
+        g.bench_with_input(
+            BenchmarkId::new("similar", name),
+            &(&old, &new),
+            |b, (o, n)| {
+                b.iter(|| {
+                    black_box(
+                        similar::TextDiff::from_lines(o.as_str(), n.as_str())
+                            .ops()
+                            .len(),
+                    )
+                })
+            },
+        );
+        g.bench_with_input(
+            BenchmarkId::new("imara-diff", name),
+            &(&old, &new),
+            |b, (o, n)| {
+                b.iter(|| {
+                    let input = imara_diff::InternedInput::new(o.as_str(), n.as_str());
+                    let mut d = imara_diff::Diff::compute(imara_diff::Algorithm::Histogram, &input);
+                    d.postprocess_lines(&input);
+                    black_box(d.count_additions())
+                })
+            },
+        );
+        g.bench_with_input(
+            BenchmarkId::new("diffy", name),
+            &(&old, &new),
+            |b, (o, n)| b.iter(|| black_box(diffy::create_patch(o, n).hunks().len())),
+        );
     }
     g.finish();
 }
@@ -85,11 +142,21 @@ fn line_diffs(c: &mut Criterion) {
 fn word_diffs(c: &mut Criterion) {
     let mut g = c.benchmark_group("word diff");
     let (old, new) = paragraph(2_000, 25);
-    g.bench_function("llm-diff 0.2 compute_words", |b| b.iter(|| black_box(llm_diff::TextDiff::compute_words(&old, &new))));
-    g.bench_function("similar from_words", |b| {
-        b.iter(|| black_box(similar::TextDiff::from_words(old.as_str(), new.as_str()).ops().len()))
+    g.bench_function("llm-diff 0.2 compute_words", |b| {
+        b.iter(|| black_box(llm_diff::TextDiff::compute_words(&old, &new)))
     });
-    g.bench_function("dissimilar (chars, semantic cleanup)", |b| b.iter(|| black_box(dissimilar::diff(&old, &new).len())));
+    g.bench_function("similar from_words", |b| {
+        b.iter(|| {
+            black_box(
+                similar::TextDiff::from_words(old.as_str(), new.as_str())
+                    .ops()
+                    .len(),
+            )
+        })
+    });
+    g.bench_function("dissimilar (chars, semantic cleanup)", |b| {
+        b.iter(|| black_box(dissimilar::diff(&old, &new).len()))
+    });
     g.finish();
 }
 

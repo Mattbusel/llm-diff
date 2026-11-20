@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 (2026-11-20)
+
+- README opens with the side this crate takes: a similarity score is how a changed number passes your eval. Why it exists, why it beats the usual approach, why adopt it today, who it is for and the tradeoffs made on purpose.
+- crates.io description and keywords say the same thing.
+
 ## [0.3.1] - 2026-11-16
 
 - Package metadata only: `repository` points at https://github.com/Mattbusel/llm-diff (the GitHub repository, where issues, releases and the dependents graph are), no code change from 0.3.0.

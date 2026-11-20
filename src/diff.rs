@@ -105,7 +105,12 @@ fn ops_from(diff: &similar::TextDiff<'_, '_, str>, strip_endings: bool) -> Vec<D
     diff.iter_all_changes()
         .map(|c| {
             let v = c.value();
-            let text = if strip_endings { strip_line_ending(v) } else { v }.to_string();
+            let text = if strip_endings {
+                strip_line_ending(v)
+            } else {
+                v
+            }
+            .to_string();
             match c.tag() {
                 similar::ChangeTag::Equal => DiffOp::Equal(text),
                 similar::ChangeTag::Insert => DiffOp::Insert(text),
@@ -117,7 +122,10 @@ fn ops_from(diff: &similar::TextDiff<'_, '_, str>, strip_endings: bool) -> Vec<D
 
 /// The Histogram line diff (with git's slider post-processing) that both
 /// [`TextDiff::compute`] and [`unified_diff`] are built on.
-fn histogram_lines<'a>(old: &'a str, new: &'a str) -> (imara_diff::InternedInput<&'a str>, imara_diff::Diff) {
+fn histogram_lines<'a>(
+    old: &'a str,
+    new: &'a str,
+) -> (imara_diff::InternedInput<&'a str>, imara_diff::Diff) {
     use imara_diff::{Algorithm, Diff, InternedInput};
     let input = InternedInput::new(old, new);
     let mut diff = Diff::compute(Algorithm::Histogram, &input);
@@ -139,8 +147,16 @@ fn line_ops(old: &str, new: &str) -> (Vec<DiffOp>, f64) {
             ops.push(DiffOp::Equal(line(t)));
             equal += 1;
         }
-        ops.extend(input.before[bs..be].iter().map(|&t| DiffOp::Delete(line(t))));
-        ops.extend(input.after[as_..ae].iter().map(|&t| DiffOp::Insert(line(t))));
+        ops.extend(
+            input.before[bs..be]
+                .iter()
+                .map(|&t| DiffOp::Delete(line(t))),
+        );
+        ops.extend(
+            input.after[as_..ae]
+                .iter()
+                .map(|&t| DiffOp::Insert(line(t))),
+        );
         b = be;
     }
     for &t in &input.before[b..] {
@@ -148,7 +164,11 @@ fn line_ops(old: &str, new: &str) -> (Vec<DiffOp>, f64) {
         equal += 1;
     }
     let total = input.before.len() + input.after.len();
-    let ratio = if total == 0 { 1.0 } else { 2.0 * equal as f64 / total as f64 };
+    let ratio = if total == 0 {
+        1.0
+    } else {
+        2.0 * equal as f64 / total as f64
+    };
     (ops, ratio)
 }
 
@@ -164,7 +184,12 @@ impl TextDiff {
     /// aligns changes on blank lines and indentation the way people expect.
     pub fn compute(old: &str, new: &str) -> Self {
         let (ops, ratio) = line_ops(old, new);
-        Self { ops, similarity: compute_similarity(old, new), ratio, identical: old == new }
+        Self {
+            ops,
+            similarity: compute_similarity(old, new),
+            ratio,
+            identical: old == new,
+        }
     }
 
     /// Word-level diff between `old` and `new`. Better than a line diff for
@@ -211,12 +236,18 @@ impl TextDiff {
 
     /// Returns the number of inserted lines (or words for [`compute_words`](Self::compute_words)).
     pub fn insertions(&self) -> usize {
-        self.ops.iter().filter(|op| matches!(op, DiffOp::Insert(_))).count()
+        self.ops
+            .iter()
+            .filter(|op| matches!(op, DiffOp::Insert(_)))
+            .count()
     }
 
     /// Returns the number of deleted lines (or words).
     pub fn deletions(&self) -> usize {
-        self.ops.iter().filter(|op| matches!(op, DiffOp::Delete(_))).count()
+        self.ops
+            .iter()
+            .filter(|op| matches!(op, DiffOp::Delete(_)))
+            .count()
     }
 
     /// Returns `true` if the two texts were exactly the same.
@@ -267,7 +298,13 @@ impl TextDiff {
 /// let patch = llm_diff::unified_diff("a\nb\nc\n", "a\nB\nc\n", 1, "v1", "v2");
 /// assert_eq!(patch, "--- v1\n+++ v2\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n");
 /// ```
-pub fn unified_diff(old: &str, new: &str, context: usize, old_name: &str, new_name: &str) -> String {
+pub fn unified_diff(
+    old: &str,
+    new: &str,
+    context: usize,
+    old_name: &str,
+    new_name: &str,
+) -> String {
     if old == new {
         return String::new();
     }
@@ -283,18 +320,39 @@ pub fn unified_diff(old: &str, new: &str, context: usize, old_name: &str, new_na
         let (bs, be) = (hunk.before.start as usize, hunk.before.end as usize);
         let (as_, ae) = (hunk.after.start as usize, hunk.after.end as usize);
         if bs > b {
-            ops.push(similar::DiffOp::Equal { old_index: b, new_index: a, len: bs - b });
+            ops.push(similar::DiffOp::Equal {
+                old_index: b,
+                new_index: a,
+                len: bs - b,
+            });
         }
         ops.push(match (be > bs, ae > as_) {
-            (true, true) => similar::DiffOp::Replace { old_index: bs, old_len: be - bs, new_index: as_, new_len: ae - as_ },
-            (true, false) => similar::DiffOp::Delete { old_index: bs, old_len: be - bs, new_index: as_ },
-            _ => similar::DiffOp::Insert { old_index: bs, new_index: as_, new_len: ae - as_ },
+            (true, true) => similar::DiffOp::Replace {
+                old_index: bs,
+                old_len: be - bs,
+                new_index: as_,
+                new_len: ae - as_,
+            },
+            (true, false) => similar::DiffOp::Delete {
+                old_index: bs,
+                old_len: be - bs,
+                new_index: as_,
+            },
+            _ => similar::DiffOp::Insert {
+                old_index: bs,
+                new_index: as_,
+                new_len: ae - as_,
+            },
         });
         b = be;
         a = ae;
     }
     if b < old_lines.len() {
-        ops.push(similar::DiffOp::Equal { old_index: b, new_index: a, len: old_lines.len() - b });
+        ops.push(similar::DiffOp::Equal {
+            old_index: b,
+            new_index: a,
+            len: old_lines.len() - b,
+        });
     }
 
     fn line(out: &mut String, tag: char, text: &str) {
@@ -314,12 +372,22 @@ pub fn unified_diff(old: &str, new: &str, context: usize, old_name: &str, new_na
         for op in &group {
             let (old_range, new_range) = (op.old_range(), op.new_range());
             match op.tag() {
-                similar::DiffTag::Equal => old_lines[old_range].iter().for_each(|l| line(&mut out, ' ', l)),
-                similar::DiffTag::Delete => old_lines[old_range].iter().for_each(|l| line(&mut out, '-', l)),
-                similar::DiffTag::Insert => new_lines[new_range].iter().for_each(|l| line(&mut out, '+', l)),
+                similar::DiffTag::Equal => old_lines[old_range]
+                    .iter()
+                    .for_each(|l| line(&mut out, ' ', l)),
+                similar::DiffTag::Delete => old_lines[old_range]
+                    .iter()
+                    .for_each(|l| line(&mut out, '-', l)),
+                similar::DiffTag::Insert => new_lines[new_range]
+                    .iter()
+                    .for_each(|l| line(&mut out, '+', l)),
                 similar::DiffTag::Replace => {
-                    old_lines[old_range].iter().for_each(|l| line(&mut out, '-', l));
-                    new_lines[new_range].iter().for_each(|l| line(&mut out, '+', l));
+                    old_lines[old_range]
+                        .iter()
+                        .for_each(|l| line(&mut out, '-', l));
+                    new_lines[new_range]
+                        .iter()
+                        .for_each(|l| line(&mut out, '+', l));
                 }
             }
         }
@@ -343,13 +411,17 @@ pub fn apply_patch(original: &str, patch: &str) -> Result<String, DiffError> {
     if patch.is_empty() {
         return Ok(original.to_string());
     }
-    let parsed = diffy::Patch::from_str(patch).map_err(|e| DiffError::InvalidDiff(format!("patch does not parse: {e}")))?;
+    let parsed = diffy::Patch::from_str(patch)
+        .map_err(|e| DiffError::InvalidDiff(format!("patch does not parse: {e}")))?;
     // diffy reads text with no hunks as an empty patch and would silently
     // return the original unchanged; treat that as an error instead.
     if parsed.hunks().is_empty() && !patch.trim().is_empty() {
-        return Err(DiffError::InvalidDiff("no hunks (@@ lines) found in the patch".into()));
+        return Err(DiffError::InvalidDiff(
+            "no hunks (@@ lines) found in the patch".into(),
+        ));
     }
-    diffy::apply(original, &parsed).map_err(|e| DiffError::InvalidDiff(format!("patch does not apply: {e}")))
+    diffy::apply(original, &parsed)
+        .map_err(|e| DiffError::InvalidDiff(format!("patch does not apply: {e}")))
 }
 
 /// Three-way merge: combine the edits `ours` and `theirs` each made to
@@ -374,10 +446,18 @@ fn compute_similarity(a: &str, b: &str) -> f64 {
     type Set<'a> = std::collections::HashSet<&'a str, foldhash::fast::FixedState>;
     let words_a: Set<'_> = a.split_whitespace().collect();
     let words_b: Set<'_> = b.split_whitespace().collect();
-    let (small, large) = if words_a.len() <= words_b.len() { (&words_a, &words_b) } else { (&words_b, &words_a) };
+    let (small, large) = if words_a.len() <= words_b.len() {
+        (&words_a, &words_b)
+    } else {
+        (&words_b, &words_a)
+    };
     let intersection = small.iter().filter(|w| large.contains(*w)).count();
     let union = words_a.len() + words_b.len() - intersection;
-    if union == 0 { 1.0 } else { intersection as f64 / union as f64 }
+    if union == 0 {
+        1.0
+    } else {
+        intersection as f64 / union as f64
+    }
 }
 
 /// An operation in a structural JSON diff.
@@ -464,20 +544,50 @@ fn array_ops(old: &[serde_json::Value], new: &[serde_json::Value]) -> Vec<ArrayO
     let mut out = Vec::new();
     for op in similar::capture_diff_slices(similar::Algorithm::Myers, &ok, &nk) {
         match op {
-            similar::DiffOp::Equal { old_index, new_index, len } => {
-                out.extend((0..len).map(|i| ArrayOp::Same { old_index: old_index + i, new_index: new_index + i }));
+            similar::DiffOp::Equal {
+                old_index,
+                new_index,
+                len,
+            } => {
+                out.extend((0..len).map(|i| ArrayOp::Same {
+                    old_index: old_index + i,
+                    new_index: new_index + i,
+                }));
             }
-            similar::DiffOp::Delete { old_index, old_len, .. } => {
-                out.extend((old_index..old_index + old_len).map(|old_index| ArrayOp::Removed { old_index }));
+            similar::DiffOp::Delete {
+                old_index, old_len, ..
+            } => {
+                out.extend(
+                    (old_index..old_index + old_len)
+                        .map(|old_index| ArrayOp::Removed { old_index }),
+                );
             }
-            similar::DiffOp::Insert { new_index, new_len, .. } => {
-                out.extend((new_index..new_index + new_len).map(|new_index| ArrayOp::Added { new_index }));
+            similar::DiffOp::Insert {
+                new_index, new_len, ..
+            } => {
+                out.extend(
+                    (new_index..new_index + new_len).map(|new_index| ArrayOp::Added { new_index }),
+                );
             }
-            similar::DiffOp::Replace { old_index, old_len, new_index, new_len } => {
+            similar::DiffOp::Replace {
+                old_index,
+                old_len,
+                new_index,
+                new_len,
+            } => {
                 let paired = old_len.min(new_len);
-                out.extend((0..paired).map(|i| ArrayOp::Changed { old_index: old_index + i, new_index: new_index + i }));
-                out.extend((old_index + paired..old_index + old_len).map(|old_index| ArrayOp::Removed { old_index }));
-                out.extend((new_index + paired..new_index + new_len).map(|new_index| ArrayOp::Added { new_index }));
+                out.extend((0..paired).map(|i| ArrayOp::Changed {
+                    old_index: old_index + i,
+                    new_index: new_index + i,
+                }));
+                out.extend(
+                    (old_index + paired..old_index + old_len)
+                        .map(|old_index| ArrayOp::Removed { old_index }),
+                );
+                out.extend(
+                    (new_index + paired..new_index + new_len)
+                        .map(|new_index| ArrayOp::Added { new_index }),
+                );
             }
         }
     }
@@ -508,7 +618,12 @@ fn pointer_escape(key: &str) -> String {
     key.replace('~', "~0").replace('/', "~1")
 }
 
-fn patch_values(ptr: &str, old: &serde_json::Value, new: &serde_json::Value, ops: &mut Vec<serde_json::Value>) {
+fn patch_values(
+    ptr: &str,
+    old: &serde_json::Value,
+    new: &serde_json::Value,
+    ops: &mut Vec<serde_json::Value>,
+) {
     use serde_json::{json, Value};
     match (old, new) {
         (Value::Object(o), Value::Object(n)) => {
@@ -532,12 +647,17 @@ fn patch_values(ptr: &str, old: &serde_json::Value, new: &serde_json::Value, ops
             for op in array_ops(o, n) {
                 match op {
                     ArrayOp::Same { .. } => at += 1,
-                    ArrayOp::Removed { .. } => ops.push(json!({"op": "remove", "path": format!("{ptr}/{at}")})),
+                    ArrayOp::Removed { .. } => {
+                        ops.push(json!({"op": "remove", "path": format!("{ptr}/{at}")}))
+                    }
                     ArrayOp::Added { new_index } => {
                         ops.push(json!({"op": "add", "path": format!("{ptr}/{at}"), "value": n[new_index]}));
                         at += 1;
                     }
-                    ArrayOp::Changed { old_index, new_index } => {
+                    ArrayOp::Changed {
+                        old_index,
+                        new_index,
+                    } => {
                         patch_values(&format!("{ptr}/{at}"), &o[old_index], &n[new_index], ops);
                         at += 1;
                     }
@@ -561,7 +681,12 @@ fn key_path(parent: &str, key: &str) -> String {
     }
 }
 
-fn diff_values(path: &str, old: &serde_json::Value, new: &serde_json::Value, ops: &mut Vec<JsonDiffOp>) {
+fn diff_values(
+    path: &str,
+    old: &serde_json::Value,
+    new: &serde_json::Value,
+    ops: &mut Vec<JsonDiffOp>,
+) {
     use serde_json::Value;
     match (old, new) {
         (Value::Object(o), Value::Object(n)) => {
@@ -569,12 +694,18 @@ fn diff_values(path: &str, old: &serde_json::Value, new: &serde_json::Value, ops
                 let child_path = key_path(path, k);
                 match n.get(k) {
                     Some(nv) => diff_values(&child_path, ov, nv, ops),
-                    None => ops.push(JsonDiffOp::KeyRemoved { path: child_path, value: ov.clone() }),
+                    None => ops.push(JsonDiffOp::KeyRemoved {
+                        path: child_path,
+                        value: ov.clone(),
+                    }),
                 }
             }
             for (k, nv) in n {
                 if !o.contains_key(k) {
-                    ops.push(JsonDiffOp::KeyAdded { path: key_path(path, k), value: nv.clone() });
+                    ops.push(JsonDiffOp::KeyAdded {
+                        path: key_path(path, k),
+                        value: nv.clone(),
+                    });
                 }
             }
         }
@@ -590,9 +721,15 @@ fn diff_values(path: &str, old: &serde_json::Value, new: &serde_json::Value, ops
                         path: format!("{path}[{new_index}]"),
                         value: n[new_index].clone(),
                     }),
-                    ArrayOp::Changed { old_index, new_index } => {
-                        diff_values(&format!("{path}[{new_index}]"), &o[old_index], &n[new_index], ops)
-                    }
+                    ArrayOp::Changed {
+                        old_index,
+                        new_index,
+                    } => diff_values(
+                        &format!("{path}[{new_index}]"),
+                        &o[old_index],
+                        &n[new_index],
+                        ops,
+                    ),
                 }
             }
         }
@@ -661,19 +798,25 @@ mod tests {
     #[test]
     fn test_json_diff_value_changed_detected() {
         let ops = json_diff(r#"{"a":1}"#, r#"{"a":2}"#).unwrap();
-        assert!(ops.iter().any(|op| matches!(op, JsonDiffOp::ValueChanged { .. })));
+        assert!(ops
+            .iter()
+            .any(|op| matches!(op, JsonDiffOp::ValueChanged { .. })));
     }
 
     #[test]
     fn test_json_diff_key_added_detected() {
         let ops = json_diff(r#"{"a":1}"#, r#"{"a":1,"b":2}"#).unwrap();
-        assert!(ops.iter().any(|op| matches!(op, JsonDiffOp::KeyAdded { .. })));
+        assert!(ops
+            .iter()
+            .any(|op| matches!(op, JsonDiffOp::KeyAdded { .. })));
     }
 
     #[test]
     fn test_json_diff_key_removed_detected() {
         let ops = json_diff(r#"{"a":1,"b":2}"#, r#"{"a":1}"#).unwrap();
-        assert!(ops.iter().any(|op| matches!(op, JsonDiffOp::KeyRemoved { .. })));
+        assert!(ops
+            .iter()
+            .any(|op| matches!(op, JsonDiffOp::KeyRemoved { .. })));
     }
 
     #[test]
@@ -712,7 +855,10 @@ mod tests {
     fn test_identical_text_gives_line_ops() {
         let d = TextDiff::compute("x\ny", "x\ny");
         assert!(d.is_identical());
-        assert_eq!(d.ops, vec![DiffOp::Equal("x".into()), DiffOp::Equal("y".into())]);
+        assert_eq!(
+            d.ops,
+            vec![DiffOp::Equal("x".into()), DiffOp::Equal("y".into())]
+        );
         assert_eq!(d.ratio, 1.0);
     }
 
@@ -778,12 +924,23 @@ mod tests {
     #[test]
     fn test_json_diff_recurses_into_arrays() {
         // 0.1.x reported the whole array as one changed value.
-        let ops = json_diff(r#"{"items":[{"p":1},{"p":2}]}"#, r#"{"items":[{"p":1},{"p":3},{"p":4}]}"#).unwrap();
+        let ops = json_diff(
+            r#"{"items":[{"p":1},{"p":2}]}"#,
+            r#"{"items":[{"p":1},{"p":3},{"p":4}]}"#,
+        )
+        .unwrap();
         assert_eq!(
             ops,
             vec![
-                JsonDiffOp::ValueChanged { path: "$.items[1].p".into(), old: 2.into(), new: 3.into() },
-                JsonDiffOp::KeyAdded { path: "$.items[2]".into(), value: serde_json::json!({"p": 4}) },
+                JsonDiffOp::ValueChanged {
+                    path: "$.items[1].p".into(),
+                    old: 2.into(),
+                    new: 3.into()
+                },
+                JsonDiffOp::KeyAdded {
+                    path: "$.items[2]".into(),
+                    value: serde_json::json!({"p": 4})
+                },
             ]
         );
         let ops = json_diff("[1,2,3]", "[1]").unwrap();
@@ -794,8 +951,14 @@ mod tests {
     #[test]
     fn test_json_diff_quotes_awkward_keys() {
         let ops = json_diff(r#"{"a.b":1,"first name":"x"}"#, r#"{"a.b":2}"#).unwrap();
-        assert!(ops.contains(&JsonDiffOp::ValueChanged { path: "$[\"a.b\"]".into(), old: 1.into(), new: 2.into() }));
-        assert!(matches!(&ops[1], JsonDiffOp::KeyRemoved { path, .. } if path == "$[\"first name\"]"));
+        assert!(ops.contains(&JsonDiffOp::ValueChanged {
+            path: "$[\"a.b\"]".into(),
+            old: 1.into(),
+            new: 2.into()
+        }));
+        assert!(
+            matches!(&ops[1], JsonDiffOp::KeyRemoved { path, .. } if path == "$[\"first name\"]")
+        );
     }
 
     #[test]
@@ -809,8 +972,18 @@ mod tests {
     #[test]
     fn test_json_array_insert_at_front_is_one_add() {
         // 0.2.0-dev compared arrays by index, so this showed 3 changes and an add.
-        let ops = json_diff(r#"[{"id":1},{"id":2},{"id":3}]"#, r#"[{"id":0},{"id":1},{"id":2},{"id":3}]"#).unwrap();
-        assert_eq!(ops, vec![JsonDiffOp::KeyAdded { path: "$[0]".into(), value: serde_json::json!({"id": 0}) }]);
+        let ops = json_diff(
+            r#"[{"id":1},{"id":2},{"id":3}]"#,
+            r#"[{"id":0},{"id":1},{"id":2},{"id":3}]"#,
+        )
+        .unwrap();
+        assert_eq!(
+            ops,
+            vec![JsonDiffOp::KeyAdded {
+                path: "$[0]".into(),
+                value: serde_json::json!({"id": 0})
+            }]
+        );
     }
 
     #[test]
@@ -819,7 +992,13 @@ mod tests {
         assert_eq!(ops.len(), 1);
         assert!(matches!(&ops[0], JsonDiffOp::KeyRemoved { .. }));
         let ops = json_diff(r#"["a","b","c"]"#, r#"["a","c"]"#).unwrap();
-        assert_eq!(ops, vec![JsonDiffOp::KeyRemoved { path: "$[1]".into(), value: "b".into() }]);
+        assert_eq!(
+            ops,
+            vec![JsonDiffOp::KeyRemoved {
+                path: "$[1]".into(),
+                value: "b".into()
+            }]
+        );
     }
 
     #[test]
@@ -831,7 +1010,10 @@ mod tests {
             json!([{"op": "replace", "path": "/a~1b", "value": 2}, {"op": "remove", "path": "/m~0n"}])
         );
         assert_eq!(json_patch(&json!([1, 2]), &json!([1, 2])), json!([]));
-        assert_eq!(json_patch(&json!(1), &json!("x")), json!([{"op": "replace", "path": "", "value": "x"}]));
+        assert_eq!(
+            json_patch(&json!(1), &json!("x")),
+            json!([{"op": "replace", "path": "", "value": "x"}])
+        );
     }
 
     #[test]
@@ -865,8 +1047,8 @@ mod tests {
         // Cross-check: a patch produced by similar is applied by diffy.
         let cases = [
             ("a\nb\nc\n", "a\nB\nc\n"),
-            ("one\ntwo\n", "one\ntwo"),          // newline removed at end
-            ("one\ntwo", "one\ntwo\nthree\n"),   // no newline at end originally
+            ("one\ntwo\n", "one\ntwo"),        // newline removed at end
+            ("one\ntwo", "one\ntwo\nthree\n"), // no newline at end originally
             ("", "new file\n"),
             ("gone\n", ""),
         ];
@@ -893,14 +1075,19 @@ mod tests {
             other => panic!("expected a conflict, got {other:?}"),
         }
         // like git, edits on directly adjacent lines conflict too
-        assert!(merge3("a
+        assert!(merge3(
+            "a
 b
 ", "A
 b
 ", "a
 B
-").is_err());
-        assert_eq!(merge3("a
+"
+        )
+        .is_err());
+        assert_eq!(
+            merge3(
+                "a
 x
 b
 ", "A
@@ -909,9 +1096,13 @@ b
 ", "a
 x
 B
-").unwrap(), "A
+"
+            )
+            .unwrap(),
+            "A
 x
 B
-");
+"
+        );
     }
 }

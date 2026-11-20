@@ -6,7 +6,9 @@ use llm_diff::store::{OutputVersion, VersionAnnotation, VersionStore};
 fn bench_text_diff(c: &mut Criterion) {
     let old = "The quick brown fox jumps over the lazy dog. ".repeat(50);
     let new = "The fast brown fox leaps over the sleepy dog. ".repeat(50);
-    c.bench_function("text_diff_2000_chars", |b| b.iter(|| TextDiff::compute(&old, &new)));
+    c.bench_function("text_diff_2000_chars", |b| {
+        b.iter(|| TextDiff::compute(&old, &new))
+    });
 }
 
 fn bench_version_store_insert(c: &mut Criterion) {
@@ -39,5 +41,10 @@ fn bench_content_address(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_text_diff, bench_version_store_insert, bench_content_address);
+criterion_group!(
+    benches,
+    bench_text_diff,
+    bench_version_store_insert,
+    bench_content_address
+);
 criterion_main!(benches);

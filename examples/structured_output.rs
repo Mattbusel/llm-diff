@@ -34,6 +34,10 @@ fn main() -> Result<(), DiffError> {
     let old: serde_json::Value = serde_json::from_str(before)?;
     let new: serde_json::Value = serde_json::from_str(after)?;
     let patch = json_patch(&old, &new);
-    println!("\nJSON Patch ({} operations):\n{}", patch.as_array().map_or(0, Vec::len), serde_json::to_string_pretty(&patch)?);
+    println!(
+        "\nJSON Patch ({} operations):\n{}",
+        patch.as_array().map_or(0, Vec::len),
+        serde_json::to_string_pretty(&patch)?
+    );
     Ok(())
 }

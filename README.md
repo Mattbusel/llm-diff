@@ -1,12 +1,18 @@
-# llm-diff
+# llm-diff: a similarity score is how a changed number passes your eval
 
-<!-- outcome-block -->
-**See exactly what changed between two LLM answers when you changed the prompt, model or temperature: word, line and JSON diffs in a few lines of Rust.**
+**Why this exists:** Prompt and model changes get checked with a string similarity score or an exact-match snapshot. A 0.98 similarity hides the one figure that changed; an exact snapshot fails on a reordered JSON key that changed nothing.
 
-**Why this over the alternatives:** A plain text diff marks a whole JSON array as changed. This reports the one element that moved, and builds for wasm too.
+**Why this instead of the usual approach:** Text diff crates diff text. llm-diff diffs what a model returns: word and line diffs for prose, structural JSON diffs that report the one array element or field that moved (with an RFC 6902 patch), three-way merges, and a content-addressed version store for outputs. It builds for wasm32 too.
 
-**Guarantee:** if it doesn't do what this README says, [open an issue](https://github.com/Mattbusel/llm-diff/issues) and I'll fix it.
-<!-- outcome-block -->
+**Why adopt it today:** `cargo add llm-diff`, run the `prompt_regression` example against your baseline outputs, and the next prompt edit shows exactly which words and fields moved instead of a score.
+
+**Built for:** Rust developers who run prompt or model regression checks and need the change itself, not a number about it.
+
+**Tradeoffs we chose on purpose:**
+
+- No embedding or LLM-judge similarity. If two answers say the same thing in different words, it shows the words.
+- JSON is compared structurally; key order never counts as a change.
+
 
 See exactly how an LLM's answer changed when you changed the prompt, the model or the temperature: line, word and character diffs, `git diff`-style patches, JSON diffs and JSON Patches, three-way merges, and a small version history for model outputs, in Rust.
 

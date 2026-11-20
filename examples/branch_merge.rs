@@ -8,9 +8,17 @@ use llm_diff::{apply_patch, DiffError, OutputVersion, VersionAnnotation, Version
 fn main() -> Result<(), DiffError> {
     let mut store = VersionStore::new(10_000);
     let base = "Title: Paris guide\nGetting around: metro\nWeather: mild\nFood: bistros\n";
-    let root = store.store(OutputVersion::new(base, "gpt-4o", VersionAnnotation::default(), None))?;
+    let root = store.store(OutputVersion::new(
+        base,
+        "gpt-4o",
+        VersionAnnotation::default(),
+        None,
+    ))?;
 
-    let note = |n: &str| VersionAnnotation { note: Some(n.into()), ..Default::default() };
+    let note = |n: &str| VersionAnnotation {
+        note: Some(n.into()),
+        ..Default::default()
+    };
     let alice = store.store(OutputVersion::new(
         "Title: Paris guide\nGetting around: metro and RER\nWeather: mild\nFood: bistros\n",
         "gpt-4o",
